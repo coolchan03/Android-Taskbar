@@ -19,6 +19,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.IBinder;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -68,8 +69,13 @@ public abstract class UIHostService extends Service implements UIHost {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         configString = U.getConfigString(this);
 
-        controller = newController();
-        controller.onCreateHost(this);
+        try {
+            controller = newController();
+            controller.onCreateHost(this);
+        } catch(RuntimeException error) {
+            Log.e("Andesk", "Failed to initialize desktop overlay", error);
+            stopSelf();
+        }
     }
 
     private boolean isDesktopSessionActive() {
@@ -86,26 +92,38 @@ public abstract class UIHostService extends Service implements UIHost {
         if(newConfigString.equals(configString)) return;
 
         configString = newConfigString;
-        controller.onRecreateHost(this);
+        try {
+            controller.onRecreateHost(this);
+        } catch(RuntimeException error) {
+            Log.e("Andesk", "Failed to recreate desktop overlay", error);
+            stopSelf();
+        }
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if(controller != null)
-            controller.onDestroyHost(this);
+        if(controller != null) {
+            try { controller.onDestroyHost(this); }
+            catch(RuntimeException error) { Log.w("Andesk", "Overlay cleanup failed", error); }
+        }
     }
 
     @Override
     public void addView(View view, ViewParams params) {
         if(windowManager != null)
-            windowManager.addView(view, params.toWindowManagerParams());
+            try { windowManager.addView(view, params.toWindowManagerParams()); }
+            catch(RuntimeException error) {
+                Log.e("Andesk", "Overlay window attachment rejected", error);
+                stopSelf();
+            }
     }
 
     @Override
     public void removeView(View view) {
         if(windowManager != null)
-            windowManager.removeView(view);
+            try { windowManager.removeView(view); }
+            catch(RuntimeException error) { Log.w("Andesk", "Overlay window removal failed", error); }
     }
 
     @Override
@@ -116,7 +134,8 @@ public abstract class UIHostService extends Service implements UIHost {
     @Override
     public void updateViewLayout(View view, ViewParams params) {
         if(windowManager != null)
-            windowManager.updateViewLayout(view, params.toWindowManagerParams());
+            try { windowManager.updateViewLayout(view, params.toWindowManagerParams()); }
+            catch(RuntimeException error) { Log.w("Andesk", "Overlay window resize failed", error); }
     }
 
     public abstract UIController newController();
