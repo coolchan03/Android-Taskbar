@@ -446,7 +446,10 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
                 addDesktopItem.setBackgroundColor(Color.argb(200, 30, 45, 65));
                 int padding = Math.round(12 * getResources().getDisplayMetrics().density);
                 addDesktopItem.setPadding(padding, padding, padding, padding);
-                addDesktopItem.setOnClickListener(v -> showDesktopMenu());
+                addDesktopItem.setOnClickListener(v -> {
+                    showDesktopMenu();
+                    v.setVisibility(View.GONE);
+                });
                 addDesktopItem.setOnLongClickListener(v -> {
                     startActivity(new Intent(this, MainActivity.class));
                     return true;
@@ -457,6 +460,8 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
                 addParams.gravity = Gravity.TOP | Gravity.END;
                 addParams.setMargins(padding, padding, padding, 0);
                 layout.addView(addDesktopItem, addParams);
+                addDesktopItem.postDelayed(
+                        () -> addDesktopItem.setVisibility(View.GONE), 3500);
                 layout.setOnLongClickListener(v -> {
                     showDesktopMenu();
                     return true;
@@ -666,7 +671,11 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
     private void startTaskbar() {
         // The Settings overlay-permission screen may trigger multiple resume callbacks.
         // Do not schedule duplicate service startups within one foreground session.
-        if(isDesktopLauncher && desktopServicesStarted) return;
+        if(isDesktopLauncher
+                && desktopServicesStarted
+                && U.isServiceRunning(this, TaskbarService.class)
+                && U.isServiceRunning(this, StartMenuService.class))
+            return;
         if(isDesktopLauncher) desktopServicesStarted = true;
         // Ensure that the freeform hack is started whenever Taskbar starts
         if(U.hasFreeformSupport(this)
@@ -738,7 +747,12 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
             }
         }
 
-        if(pref.getBoolean(PREF_TASKBAR_ACTIVE, false) && !U.isServiceRunning(this, NotificationService.class))
+        // Service startup is asynchronous. Do not clear the desktop-active flag
+        // immediately after startService(), or NotificationService can observe a
+        // false flag and shut itself down before its onCreate() completes.
+        if(!isDesktopLauncher
+                && pref.getBoolean(PREF_TASKBAR_ACTIVE, false)
+                && !U.isServiceRunning(this, NotificationService.class))
             pref.edit().putBoolean(PREF_TASKBAR_ACTIVE, false).apply();
 
         // Show the Taskbar temporarily, as nothing else will be visible on screen
@@ -761,7 +775,6 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
     @Override
     protected void onStop() {
         super.onStop();
-        if(isDesktopLauncher) desktopServicesStarted = false;
 
         if(desktopWidgets != null) {
             desktopWidgets.exitEditMode();
@@ -770,7 +783,7 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
 
         SharedPreferences pref = U.getSharedPreferences(this);
         if(!canBootToFreeform()) {
-            if(isDesktopLauncher || U.shouldCollapse(this, false)) {
+            if(!isDesktopLauncher && U.shouldCollapse(this, false)) {
                 U.sendBroadcast(this, ACTION_TEMP_HIDE_TASKBAR);
             }
 
@@ -788,17 +801,12 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
                     startService(new Intent(this, DashboardService.class));
                 }
             } else {
-                // A desktop session persists in Recents, but overlay services must never
-                // draw above unrelated foreground applications.
-                if(isDesktopLauncher) {
-                    // Keep the desktop task resumable, but mark overlays inactive
-                    // before tearing services down; other receivers must not restart them.
-                    DesktopSessionState.background(this);
-                    stopService(new Intent(this, TaskbarService.class));
-                    stopService(new Intent(this, StartMenuService.class));
-                    stopService(new Intent(this, DashboardService.class));
-                    stopService(new Intent(this, NotificationService.class));
-                }
+                // Andesk owns these overlays for the lifetime of the desktop task.
+                // Opening another Android app is not an exit: keep the taskbar and
+                // Start menu services alive until the desktop task itself is closed.
+                if(isDesktopLauncher)
+                    DesktopSessionState.foreground(this);
+
                 // Stop the Taskbar and Start Menu services if they should normally not be active
                 if(!isDesktopLauncher && (!pref.getBoolean(PREF_TASKBAR_ACTIVE, false) || pref.getBoolean(PREF_IS_HIDDEN, false))) {
                     stopService(new Intent(this, TaskbarService.class));
@@ -1116,14 +1124,25 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
             });
 
             iconContainer.setOnLongClickListener(view -> {
-                int[] location = new int[2];
-                view.getLocationOnScreen(location);
-
                 DesktopIconInfo info = icons.get(index);
                 if(isDesktopLauncher && (info == null || info.entry == null)) {
                     showDesktopMenu();
                     return true;
                 }
+
+                if(isDesktopLauncher && info != null && info.entry != null
+                        && iconContainer.getChildCount() > 0) {
+                    startDragIndex = index;
+                    View iconView = iconContainer.getChildAt(0);
+                    ClipData data = ClipData.newPlainText("", "");
+                    View.DragShadowBuilder shadowBuilder = new View.DragShadowBuilder(iconView);
+                    iconView.startDrag(data, shadowBuilder, iconView, 0);
+                    iconView.setVisibility(View.INVISIBLE);
+                    return true;
+                }
+
+                int[] location = new int[2];
+                view.getLocationOnScreen(location);
                 if(info == null) info = getDesktopIconInfo(index);
 
                 openContextMenu(info, location);
