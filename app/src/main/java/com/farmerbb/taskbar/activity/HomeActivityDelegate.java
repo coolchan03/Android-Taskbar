@@ -283,14 +283,18 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
                 super.onAttachedToWindow();
 
                 WallpaperManager wallpaperManager = (WallpaperManager) getSystemService(WALLPAPER_SERVICE);
-                wallpaperManager.setWallpaperOffsets(getWindowToken(), 0.5f, 0.5f);
+                try {
+                    wallpaperManager.setWallpaperOffsets(getWindowToken(), 0.5f, 0.5f);
+                } catch(RuntimeException e) {
+                    android.util.Log.w("Andesk", "Wallpaper offsets unavailable", e);
+                }
 
                 if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     DisplayInfo display = U.getDisplayInfo(HomeActivityDelegate.this);
                     if(display.width > 0 && display.height > 0) {
                         try {
                             wallpaperManager.suggestDesiredDimensions(display.width, display.height);
-                        } catch (IllegalArgumentException ignored) {}
+                        } catch (RuntimeException ignored) {}
                     }
                 }
 
@@ -672,7 +676,7 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
         }
 
         SharedPreferences pref = U.getSharedPreferences(this);
-        if(pref.getBoolean(PREF_FIRST_RUN, true)) {
+        if(!isDesktopLauncher && pref.getBoolean(PREF_FIRST_RUN, true)) {
             SharedPreferences.Editor editor = pref.edit();
             editor.putBoolean(PREF_FIRST_RUN, false);
             editor.putBoolean(PREF_COLLAPSED, true);
