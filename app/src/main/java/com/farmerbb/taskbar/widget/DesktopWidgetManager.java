@@ -53,6 +53,7 @@ import static com.farmerbb.taskbar.util.Constants.*;
 public class DesktopWidgetManager {
     public static final int REQUEST_PICK_WIDGET = 4601;
     public static final int REQUEST_CONFIGURE_WIDGET = 4602;
+    public static final int REQUEST_BIND_WIDGET = 4603;
 
     private static final int HOST_ID = 4242;
     private static final int MIN_SIZE_DP = 56;
@@ -131,16 +132,48 @@ public class DesktopWidgetManager {
     /* Adding widgets */
 
     public void startAddWidget() {
+        List<AppWidgetProviderInfo> providers =
+                new ArrayList<>(appWidgetManager.getInstalledProviders());
+
+        if(providers.isEmpty()) {
+            U.showToast(activity, R.string.tb_error_creating_widget);
+            return;
+        }
+
+        providers.sort((a, b) -> String.CASE_INSENSITIVE_ORDER.compare(
+                String.valueOf(a.loadLabel(activity.getPackageManager())),
+                String.valueOf(b.loadLabel(activity.getPackageManager()))));
+
+        CharSequence[] labels = new CharSequence[providers.size()];
+        for(int i = 0; i < providers.size(); i++)
+            labels[i] = providers.get(i).loadLabel(activity.getPackageManager());
+
+        new AlertDialog.Builder(activity)
+                .setTitle(R.string.tb_add_widget)
+                .setItems(labels, (dialog, which) -> bindWidget(providers.get(which)))
+                .show();
+    }
+
+    private void bindWidget(AppWidgetProviderInfo info) {
         int id = appWidgetHost.allocateAppWidgetId();
         pendingId = id;
 
-        Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
-        pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
+        U.sendBroadcast(activity, ACTION_TEMP_HIDE_TASKBAR);
 
         try {
-            U.sendBroadcast(activity, ACTION_TEMP_HIDE_TASKBAR);
-            activity.startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
-        } catch(ActivityNotFoundException e) {
+            if(appWidgetManager.bindAppWidgetIdIfAllowed(id, info.provider)) {
+                continueWidgetSetup(id);
+                return;
+            }
+        } catch(RuntimeException ignored) {}
+
+        Intent bindIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
+        bindIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
+        bindIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider);
+
+        try {
+            activity.startActivityForResult(bindIntent, REQUEST_BIND_WIDGET);
+        } catch(ActivityNotFoundException | SecurityException e) {
             discardPending();
             U.showToast(activity, R.string.tb_error_creating_widget);
         }
@@ -148,7 +181,9 @@ public class DesktopWidgetManager {
 
     /** @return true if the result belonged to this manager */
     public boolean handleActivityResult(int requestCode, int resultCode, Intent data) {
-        if(requestCode != REQUEST_PICK_WIDGET && requestCode != REQUEST_CONFIGURE_WIDGET)
+        if(requestCode != REQUEST_PICK_WIDGET
+                && requestCode != REQUEST_BIND_WIDGET
+                && requestCode != REQUEST_CONFIGURE_WIDGET)
             return false;
 
         int id = data != null
@@ -162,25 +197,29 @@ public class DesktopWidgetManager {
             return true;
         }
 
-        if(requestCode == REQUEST_PICK_WIDGET) {
-            AppWidgetProviderInfo info = id != -1 ? appWidgetManager.getAppWidgetInfo(id) : null;
-            if(info == null) {
-                discardPending();
-                U.showToast(activity, R.string.tb_error_creating_widget);
-            } else if(info.configure != null) {
-                try {
-                    appWidgetHost.startAppWidgetConfigureActivityForResult(
-                            activity, id, 0, REQUEST_CONFIGURE_WIDGET, null);
-                } catch(RuntimeException e) {
-                    discardPending();
-                    U.showToast(activity, R.string.tb_error_creating_widget);
-                }
-            } else
-                finishAddingWidget(id);
-        } else
+        if(requestCode == REQUEST_CONFIGURE_WIDGET)
             finishAddingWidget(id);
+        else
+            continueWidgetSetup(id);
 
         return true;
+    }
+
+    private void continueWidgetSetup(int id) {
+        AppWidgetProviderInfo info = id != -1 ? appWidgetManager.getAppWidgetInfo(id) : null;
+        if(info == null) {
+            discardPending();
+            U.showToast(activity, R.string.tb_error_creating_widget);
+        } else if(info.configure != null) {
+            try {
+                appWidgetHost.startAppWidgetConfigureActivityForResult(
+                        activity, id, 0, REQUEST_CONFIGURE_WIDGET, null);
+            } catch(RuntimeException e) {
+                discardPending();
+                U.showToast(activity, R.string.tb_error_creating_widget);
+            }
+        } else
+            finishAddingWidget(id);
     }
 
     private void discardPending() {
