@@ -1593,18 +1593,23 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
     private void openDocumentShortcut(org.json.JSONObject shortcut) {
         android.net.Uri uri = android.net.Uri.parse(shortcut.optString("uri"));
         boolean folder = shortcut.optBoolean("folder", false);
-        Intent intent = new Intent(folder ? Intent.ACTION_OPEN_DOCUMENT_TREE : Intent.ACTION_VIEW);
-        if(folder)
-            intent.setData(uri);
-        else {
-            String mimeType = getContentResolver().getType(uri);
-            intent.setDataAndType(uri, mimeType == null ? "*/*" : mimeType);
-        }
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        String mimeType = folder ? android.provider.DocumentsContract.Document.MIME_TYPE_DIR
+                : getContentResolver().getType(uri);
+        intent.setDataAndType(uri, mimeType == null ? "*/*" : mimeType);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        if(folder && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            intent.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, uri);
-        try { startActivity(intent); }
-        catch(RuntimeException error) {
+        try {
+            startActivity(intent);
+        } catch(RuntimeException error) {
+            if(folder) {
+                // A file manager is optional on Android; use the system picker to browse.
+                Intent browse = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                browse.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    browse.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, uri);
+                try { startActivity(browse); return; }
+                catch(RuntimeException ignored) { android.util.Log.w("Andesk", "Folder browser unavailable", ignored); }
+            }
             android.util.Log.w("Andesk", "Unable to open document shortcut", error);
             android.widget.Toast.makeText(this, "No app can open this shortcut", android.widget.Toast.LENGTH_SHORT).show();
         }
