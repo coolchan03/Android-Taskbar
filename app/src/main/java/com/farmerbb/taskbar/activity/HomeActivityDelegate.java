@@ -117,6 +117,7 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
     private DesktopWidgetManager desktopWidgets;
     private TextView desktopAddButton;
     private boolean waitingForPermission;
+    private boolean desktopServicesStarted;
     private boolean isWallpaperEnabled;
     private boolean isTaskVirtualDisplay;
 
@@ -659,6 +660,10 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
     }
 
     private void startTaskbar() {
+        // The Settings overlay-permission screen may trigger multiple resume callbacks.
+        // Do not schedule duplicate service startups within one foreground session.
+        if(isDesktopLauncher && desktopServicesStarted) return;
+        if(isDesktopLauncher) desktopServicesStarted = true;
         // Ensure that the freeform hack is started whenever Taskbar starts
         if(U.hasFreeformSupport(this)
                 && U.isFreeformModeEnabled(this)
@@ -720,6 +725,7 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
                 if(isDesktopLauncher)
                     startService(new Intent(this, NotificationService.class));
             } catch (RuntimeException error) {
+                if(isDesktopLauncher) desktopServicesStarted = false;
                 android.util.Log.e("Andesk", "Desktop overlay services failed to start", error);
                 if(isDesktopLauncher) {
                     pref.edit().putBoolean(PREF_TASKBAR_ACTIVE, false).apply();
@@ -751,6 +757,7 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
     @Override
     protected void onStop() {
         super.onStop();
+        if(isDesktopLauncher) desktopServicesStarted = false;
 
         if(desktopWidgets != null) {
             desktopWidgets.exitEditMode();
