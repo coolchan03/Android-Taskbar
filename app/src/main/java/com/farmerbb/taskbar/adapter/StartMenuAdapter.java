@@ -114,11 +114,12 @@ public class StartMenuAdapter extends ArrayAdapter<AppEntry> implements SectionI
                     android.content.ClipData data = android.content.ClipData.newPlainText(
                             "andesk-app", "andesk-app:" + shortcut.toJson(getContext()).toString());
                     int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ? View.DRAG_FLAG_GLOBAL : 0;
+                    boolean started;
                     if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
-                        view.startDragAndDrop(data, new View.DragShadowBuilder(view), null, flags);
+                        started = view.startDragAndDrop(data, new View.DragShadowBuilder(view), null, flags);
                     else
-                        view.startDrag(data, new View.DragShadowBuilder(view), null, 0);
-                    return true;
+                        started = view.startDrag(data, new View.DragShadowBuilder(view), null, 0);
+                    if(started) return true;
                 } catch(RuntimeException ignored) {
                     // The regular app context menu remains available as a fallback.
                 }

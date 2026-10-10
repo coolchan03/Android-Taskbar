@@ -548,6 +548,7 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
                                     for(int j = 0; j < icons.length(); j++) {
                                         org.json.JSONObject icon = icons.getJSONObject(j);
                                         if(icon.optInt("column", -1) == info.column && icon.optInt("row", -1) == info.row) occupied = true;
+                                    if(!occupied && isOccupied(new org.json.JSONArray(U.getSharedPreferences(this).getString("andesk_documents", "[]")), info)) occupied = true;
                                     }
                                     if(!occupied) {
                                         Intent picker = U.getThemedIntent(this, DesktopIconSelectAppActivity.class);
@@ -1459,6 +1460,7 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
                 org.json.JSONObject old = entries.getJSONObject(i);
                 if(old.optInt("column", -1) == slot.column && old.optInt("row", -1) == slot.row) return;
             }
+            if(isOccupied(new JSONArray(pref.getString("andesk_documents", "[]")), slot)) return;
             entries.put(app.toJson(this));
             pref.edit().putString(PREF_DESKTOP_ICONS, entries.toString()).apply();
             refreshDesktopIcons();
