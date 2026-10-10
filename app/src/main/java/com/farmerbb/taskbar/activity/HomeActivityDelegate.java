@@ -542,15 +542,11 @@ public class HomeActivityDelegate extends AppCompatActivity implements UIHost {
                         if(desktopIcons != null) {
                             try {
                                 org.json.JSONArray icons = new org.json.JSONArray(U.getSharedPreferences(this).getString(PREF_DESKTOP_ICONS, "[]"));
+                                org.json.JSONArray documents = new org.json.JSONArray(
+                                        U.getSharedPreferences(this).getString("andesk_documents", "[]"));
                                 for(int i = 0; i < desktopIcons.getChildCount(); i++) {
                                     DesktopIconInfo info = getDesktopIconInfo(i);
-                                    boolean occupied = false;
-                                    for(int j = 0; j < icons.length(); j++) {
-                                        org.json.JSONObject icon = icons.getJSONObject(j);
-                                        if(icon.optInt("column", -1) == info.column && icon.optInt("row", -1) == info.row) occupied = true;
-                                    if(!occupied && isOccupied(new org.json.JSONArray(U.getSharedPreferences(this).getString("andesk_documents", "[]")), info)) occupied = true;
-                                    }
-                                    if(!occupied) {
+                                    if(!isOccupied(icons, info) && !isOccupied(documents, info)) {
                                         Intent picker = U.getThemedIntent(this, DesktopIconSelectAppActivity.class);
                                         picker.putExtra("desktop_icon", info);
                                         startActivity(picker);
