@@ -32,3 +32,7 @@ jobs:
       run: ./gradlew spotlessCheck
     - name: Run tests
       run: ./gradlew testFreeDebug
+    - name: Android lint diagnostics
+      if: always()
+      continue-on-error: true
+      run: ./gradlew lintFreeDebug
