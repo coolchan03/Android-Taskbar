@@ -170,7 +170,10 @@ public class U {
                 .setPositiveButton(R.string.tb_action_grant_permission, (dialog, which) -> {
                     try {
                         Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.getPackageName()));
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        // Keep the overlay permission screen in the requesting Activity task.
+                        // NEW_TASK can return to the system home rather than Andesk.
+                        if(!(context instanceof android.app.Activity))
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         context.startActivity(intent);
 
                         callbacks.onFinish.run();
@@ -190,7 +193,10 @@ public class U {
                 .setPositiveButton(R.string.tb_action_open_settings, (dialog, which) -> {
                     try {
                         Intent intent = new Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        // Keep the overlay permission screen in the requesting Activity task.
+                        // NEW_TASK can return to the system home rather than Andesk.
+                        if(!(context instanceof android.app.Activity))
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         context.startActivity(intent);
 
                         callbacks.onFinish.run();
